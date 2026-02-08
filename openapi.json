@@ -1,0 +1,734 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ktor Locations API",
+    "version": "1.0.0",
+    "description": "REST API for managing locations, parking spaces, and EV charging stations."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080"
+    }
+  ],
+  "paths": {
+    "/test": {
+      "get": {
+        "summary": "Test endpoint",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/locations": {
+      "get": {
+        "summary": "List all locations",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LocationResponse"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/locations/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Get a location by ID",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a location by ID",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/LocationUpdateRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ParkingSpaceUpdateRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EvChargingStationUpdateRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LocationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParkingSpaceResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EvChargingStationResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid UUID or input",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a location by ID",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "400": {
+            "description": "Invalid UUID",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/locations/parking": {
+      "post": {
+        "summary": "Create a parking space location",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParkingSpaceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParkingSpaceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/locations/ev-charging": {
+      "post": {
+        "summary": "Create an EV charging station location",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvChargingStationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvChargingStationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LocationType": {
+        "type": "string",
+        "enum": [
+          "PARKING_SPACE",
+          "EV_CHARGING_STATION",
+          "GENERIC_POINT_OF_INTEREST"
+        ]
+      },
+      "ChargerType": {
+        "type": "string",
+        "enum": [
+          "TYPE_2_AC",
+          "CCS_COMBO_2_DC",
+          "CHADEMO_DC",
+          "TESLA_SUPERCHARGER"
+        ]
+      },
+      "LocationRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "latitude",
+          "longitude",
+          "address",
+          "city",
+          "country",
+          "type"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "zipCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/LocationType"
+          }
+        }
+      },
+      "ParkingSpaceRequest": {
+        "type": "object",
+        "required": [
+          "location",
+          "totalSpaces",
+          "availableSpaces",
+          "isHandicapAccessible",
+          "isCovered"
+        ],
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/LocationRequest"
+          },
+          "totalSpaces": {
+            "type": "integer"
+          },
+          "availableSpaces": {
+            "type": "integer"
+          },
+          "hourlyRate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "maxDurationHours": {
+            "type": "integer",
+            "nullable": true
+          },
+          "isHandicapAccessible": {
+            "type": "boolean"
+          },
+          "isCovered": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EvChargingStationRequest": {
+        "type": "object",
+        "required": [
+          "location",
+          "chargerType",
+          "numChargers",
+          "chargingSpeedKw",
+          "isFastCharging",
+          "isOperational"
+        ],
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/LocationRequest"
+          },
+          "chargerType": {
+            "$ref": "#/components/schemas/ChargerType"
+          },
+          "numChargers": {
+            "type": "integer"
+          },
+          "chargingSpeedKw": {
+            "type": "number",
+            "format": "double"
+          },
+          "isFastCharging": {
+            "type": "boolean"
+          },
+          "costPerKwh": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "isOperational": {
+            "type": "boolean"
+          }
+        }
+      },
+      "LocationResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "latitude",
+          "longitude",
+          "address",
+          "city",
+          "country",
+          "type",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "zipCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/LocationType"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ParkingSpaceResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "latitude",
+          "longitude",
+          "address",
+          "city",
+          "country",
+          "totalSpaces",
+          "availableSpaces",
+          "isHandicapAccessible",
+          "isCovered",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "zipCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string"
+          },
+          "totalSpaces": {
+            "type": "integer"
+          },
+          "availableSpaces": {
+            "type": "integer"
+          },
+          "hourlyRate": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "maxDurationHours": {
+            "type": "integer",
+            "nullable": true
+          },
+          "isHandicapAccessible": {
+            "type": "boolean"
+          },
+          "isCovered": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EvChargingStationResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "latitude",
+          "longitude",
+          "address",
+          "city",
+          "country",
+          "chargerType",
+          "numChargers",
+          "chargingSpeedKw",
+          "isFastCharging",
+          "isOperational",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "zipCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string"
+          },
+          "chargerType": {
+            "$ref": "#/components/schemas/ChargerType"
+          },
+          "numChargers": {
+            "type": "integer"
+          },
+          "chargingSpeedKw": {
+            "type": "number",
+            "format": "double"
+          },
+          "isFastCharging": {
+            "type": "boolean"
+          },
+          "costPerKwh": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "isOperational": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "LocationUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "zipCode": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/LocationType"
+          }
+        }
+      },
+      "ParkingSpaceUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/LocationUpdateRequest"
+          },
+          "totalSpaces": {
+            "type": "integer"
+          },
+          "availableSpaces": {
+            "type": "integer"
+          },
+          "hourlyRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "maxDurationHours": {
+            "type": "integer"
+          },
+          "isHandicapAccessible": {
+            "type": "boolean"
+          },
+          "isCovered": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EvChargingStationUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/LocationUpdateRequest"
+          },
+          "chargerType": {
+            "$ref": "#/components/schemas/ChargerType"
+          },
+          "numChargers": {
+            "type": "integer"
+          },
+          "chargingSpeedKw": {
+            "type": "number",
+            "format": "double"
+          },
+          "isFastCharging": {
+            "type": "boolean"
+          },
+          "costPerKwh": {
+            "type": "number",
+            "format": "double"
+          },
+          "isOperational": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
