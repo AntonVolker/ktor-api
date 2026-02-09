@@ -126,9 +126,11 @@ class LocationService {
             ?.toEvChargingStationResponse()
     }
 
-    suspend fun getAllLocations(): List<LocationResponse> = dbQuery {
-        logger.info("Attempting to get all locations")
-        Locations.selectAll().map { it.toLocationResponse() }
+    suspend fun getAllLocations(limit: Int = 20, offset: Long = 0): List<LocationResponse> = dbQuery {
+        logger.info("Attempting to get all locations (limit: {}, offset: {})", limit, offset)
+        Locations.selectAll()
+            .limit(limit, offset = offset)
+            .map { it.toLocationResponse() }
     }
 
     suspend fun findLocationsWithinRadius(latitude: Double, longitude: Double, radiusKm: Double): List<LocationResponse> = dbQuery {
@@ -273,14 +275,23 @@ class LocationService {
     }
 
     private fun parseGeomValue(value: String): Pair<Double, Double> {
-        // Handle both WKT "POINT(lon lat)" and EWKB Hex strings
-        return if (value.startsWith("0101")) {
-            parseEwkbHex(value)
-        } else {
-            val coordinates = value.substringAfter("(").substringBefore(")")
-                .trim()
-                .split(" ")
-            coordinates[0].toDouble() to coordinates[1].toDouble()
+        return try {
+            if (value.startsWith("0101")) {
+                parseEwkbHex(value)
+            } else {
+                // More robust regex for "POINT(lon lat)" or "POINT (lon lat)" with varied spacing
+                val match = Regex("""POINT\s*\(\s*([-\d.]+)\s+([-\d.]+)\s*\)""", RegexOption.IGNORE_CASE).find(value)
+                if (match != null) {
+                    val lon = match.groupValues[1].toDouble()
+                    val lat = match.groupValues[2].toDouble()
+                    lon to lat
+                } else {
+                    throw IllegalArgumentException("Malformed WKT string: $value")
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to parse geometry value: $value", e)
+            0.0 to 0.0 // Fallback or could throw a custom error
         }
     }
 

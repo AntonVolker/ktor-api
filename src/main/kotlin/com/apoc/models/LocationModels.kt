@@ -20,7 +20,13 @@ data class LocationRequest(
     val zipCode: String? = null,
     val country: String,
     val type: LocationType
-)
+) {
+    fun validate() {
+        require(latitude in -90.0..90.0) { "Latitude must be between -90 and 90" }
+        require(longitude in -180.0..180.0) { "Longitude must be between -180 and 180" }
+        require(name.isNotBlank()) { "Name cannot be blank" }
+    }
+}
 
 @Serializable
 data class ParkingSpaceRequest(
@@ -31,7 +37,13 @@ data class ParkingSpaceRequest(
     val maxDurationHours: Int? = null,
     val isHandicapAccessible: Boolean,
     val isCovered: Boolean
-)
+) {
+    fun validate() {
+        location.validate()
+        require(totalSpaces >= 0) { "totalSpaces must be non-negative" }
+        require(availableSpaces in 0..totalSpaces) { "availableSpaces must be between 0 and totalSpaces" }
+    }
+}
 
 @Serializable
 data class EvChargingStationRequest(
@@ -42,7 +54,13 @@ data class EvChargingStationRequest(
     val isFastCharging: Boolean,
     val costPerKwh: Double? = null,
     val isOperational: Boolean
-)
+) {
+    fun validate() {
+        location.validate()
+        require(numChargers >= 0) { "numChargers must be non-negative" }
+        require(chargingSpeedKw > 0) { "chargingSpeedKw must be positive" }
+    }
+}
 
 // --- Responses ---
 

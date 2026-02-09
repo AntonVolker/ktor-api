@@ -18,7 +18,20 @@ import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.contextual
 import java.util.*
 
+import io.ktor.server.plugins.statuspages.*
+import com.apoc.models.ErrorResponse
+
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
+
 fun main() {
+    val jwtIssuer = System.getenv("JWT_ISSUER") ?: "http://0.0.0.0:8080/"
+    val jwtAudience = System.getenv("JWT_AUDIENCE") ?: "apoc-api"
+    val jwtRealm = "apoc-api-realm"
+    val jwtSecret = System.getenv("JWT_SECRET") ?: "secret"
+
     embeddedServer(Netty, port = 8080, host = "0.0.0.0") {
         initDatabase()
         install(ContentNegotiation) {
@@ -29,6 +42,46 @@ fun main() {
                     contextual(UUIDSerializer)
                 }
             })
+        }
+        install(Authentication) {
+            jwt("auth-jwt") {
+                realm = jwtRealm
+                verifier(
+                    JWT
+                        .require(Algorithm.HMAC256(jwtSecret))
+                        .withIssuer(jwtIssuer)
+                        .withAudience(jwtAudience)
+                        .build()
+                )
+                validate { credential ->
+                    if (credential.payload.audience.contains(jwtAudience)) {
+                        JWTPrincipal(credential.payload)
+                    } else {
+                        null
+                    }
+                }
+                challenge { _, _ ->
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(HttpStatusCode.Unauthorized.value, "Token is not valid or has expired"))
+                }
+            }
+        }
+        install(StatusPages) {
+            exception<Throwable> { call, cause ->
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    ErrorResponse(
+                        status = HttpStatusCode.InternalServerError.value,
+                        message = "An unexpected error occurred",
+                        details = cause.localizedMessage
+                    )
+                )
+            }
+            status(HttpStatusCode.NotFound) { call, status ->
+                call.respond(status, ErrorResponse(status.value, "Resource not found"))
+            }
+            status(HttpStatusCode.BadRequest) { call, status ->
+                call.respond(status, ErrorResponse(status.value, "Bad request"))
+            }
         }
         install(CORS) {
             allowHost("antonvolker.github.io", schemes = listOf("https"))
@@ -54,7 +107,6 @@ fun Application.configureRouting() {
             call.respondText("Hello from Ktor /test!")
         }
         
-        // Register the modularized location routes
         locationRoutes(locationService)
     }
 }
