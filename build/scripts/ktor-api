@@ -213,7 +213,7 @@ DEFAULT_JVM_OPTS=""
 
 set -- \
         -classpath "$CLASSPATH" \
-        com.example.ApplicationKt \
+        com.apoc.ApplicationKt \
         "$@"
 
 # Stop when "xargs" is not available.

@@ -74,7 +74,7 @@ set CLASSPATH=%APP_HOME%\lib\ktor-api-0.0.1.jar;%APP_HOME%\lib\exposed-dao-0.52.
 
 
 @rem Execute ktor-api
-"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %KTOR_API_OPTS%  -classpath "%CLASSPATH%" com.example.ApplicationKt %*
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %KTOR_API_OPTS%  -classpath "%CLASSPATH%" com.apoc.ApplicationKt %*
 
 :end
 @rem End local scope for the variables with windows NT shell

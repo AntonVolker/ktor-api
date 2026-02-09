@@ -13,8 +13,7 @@ group = "com.example"
 version = "0.0.1"
 
 application {
-    // This is what the original (working) project used
-    mainClass.set("com.example.ApplicationKt")
+    mainClass.set("com.apoc.ApplicationKt")
 }
 
 repositories {
