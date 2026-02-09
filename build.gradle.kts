@@ -9,7 +9,7 @@ kotlin {
     jvmToolchain(21)
 }
 
-group = "com.example"
+group = "com.apoc"
 version = "0.0.1"
 
 application {

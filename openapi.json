@@ -13,18 +13,14 @@
   ],
   "security": [
     {
-      "bearerAuth": [
-
-      ]
+      "bearerAuth": []
     }
   ],
   "paths": {
     "/test": {
       "get": {
         "summary": "Test endpoint",
-        "security": [
-
-        ],
+        "security": [],
         "responses": {
           "200": {
             "description": "OK",
