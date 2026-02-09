@@ -4,12 +4,9 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.coroutines.Dispatchers
 import org.jetbrains.exposed.dao.id.UUIDTable
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.Column
-import org.jetbrains.exposed.sql.ReferenceOption
-import org.jetbrains.exposed.sql.BooleanColumnType
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.javatime.datetime
+import org.jetbrains.exposed.sql.statements.api.PreparedStatementApi
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.LocalDateTime
@@ -30,11 +27,36 @@ enum class ChargerType {
     TESLA_SUPERCHARGER
 }
 
+/**
+ * A custom column type for PostGIS Geometry (specifically POINT).
+ * We store and retrieve it as a String (WKT - Well Known Text) like 'POINT(lon lat)'.
+ */
+class PostGISPointColumnType : ColumnType<String>() {
+    override fun sqlType(): String = "GEOMETRY(POINT, 4326)"
+
+    override fun valueFromDB(value: Any): String? = when (value) {
+        is String -> value
+        else -> value.toString()
+    }
+
+    override fun notNullValueToDB(value: String): Any = CustomFunction<String>("ST_GeomFromText", VarCharColumnType(), QueryParameter(value, VarCharColumnType()), QueryParameter(4326, IntegerColumnType()))
+
+    override fun setParameter(stmt: PreparedStatementApi, index: Int, value: Any?) {
+        if (value is String) {
+            // Use the raw string value which PostGIS will convert via ST_GeomFromText if correctly mapped
+            stmt[index] = value
+        } else {
+            super.setParameter(stmt, index, value)
+        }
+    }
+}
+
+fun Table.point(name: String): Column<String> = registerColumn(name, PostGISPointColumnType())
+
 object Locations : UUIDTable("locations") {
     val name = varchar("name", 255)
     val description = text("description").nullable()
-    val latitude = double("latitude")
-    val longitude = double("longitude")
+    val geom = point("geom") // Use our custom point column
     val address = varchar("address", 255)
     val city = varchar("city", 255)
     val state = varchar("state", 255).nullable()
@@ -46,23 +68,23 @@ object Locations : UUIDTable("locations") {
 }
 
 object ParkingSpaces : UUIDTable("parking_spaces") {
-    val locationId = reference("location_id", Locations, onDelete = org.jetbrains.exposed.sql.ReferenceOption.CASCADE)
+    val locationId = reference("location_id", Locations, onDelete = ReferenceOption.CASCADE)
     val totalSpaces = integer("total_spaces")
     val availableSpaces = integer("available_spaces")
     val hourlyRate = double("hourly_rate").nullable()
     val maxDurationHours = integer("max_duration_hours").nullable()
-    val isHandicapAccessible = registerColumn<Boolean>("is_handicap_accessible", org.jetbrains.exposed.sql.BooleanColumnType())
-    val isCovered = registerColumn<Boolean>("is_covered", org.jetbrains.exposed.sql.BooleanColumnType())
+    val isHandicapAccessible = registerColumn<Boolean>("is_handicap_accessible", BooleanColumnType())
+    val isCovered = registerColumn<Boolean>("is_covered", BooleanColumnType())
 }
 
 object EvChargingStations : UUIDTable("ev_charging_stations") {
-    val locationId = reference("location_id", Locations, onDelete = org.jetbrains.exposed.sql.ReferenceOption.CASCADE)
+    val locationId = reference("location_id", Locations, onDelete = ReferenceOption.CASCADE)
     val chargerType = enumerationByName("charger_type", 50, ChargerType::class)
     val numChargers = integer("num_chargers")
     val chargingSpeedKw = double("charging_speed_kw")
-    val isFastCharging = registerColumn<Boolean>("is_fast_charging", org.jetbrains.exposed.sql.BooleanColumnType())
+    val isFastCharging = registerColumn<Boolean>("is_fast_charging", BooleanColumnType())
     val costPerKwh = double("cost_per_kwh").nullable()
-    val isOperational = registerColumn<Boolean>("is_operational", org.jetbrains.exposed.sql.BooleanColumnType())
+    val isOperational = registerColumn<Boolean>("is_operational", BooleanColumnType())
 }
 
 fun initDatabase() {

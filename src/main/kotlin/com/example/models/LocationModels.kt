@@ -12,8 +12,8 @@ import java.util.*
 data class LocationRequest(
     val name: String,
     val description: String? = null,
-    val latitude: Double,
-    val longitude: Double,
+    val latitude: Double, // Re-added for API consistency
+    val longitude: Double, // Re-added for API consistency
     val address: String,
     val city: String,
     val state: String? = null,
@@ -51,8 +51,8 @@ data class LocationResponse(
     @Contextual val id: UUID,
     val name: String,
     val description: String? = null,
-    val latitude: Double,
-    val longitude: Double,
+    val latitude: Double, // Kept for API consistency
+    val longitude: Double, // Kept for API consistency
     val address: String,
     val city: String,
     val state: String? = null,
@@ -68,8 +68,8 @@ data class ParkingSpaceResponse(
     @Contextual val id: UUID,
     val name: String,
     val description: String? = null,
-    val latitude: Double,
-    val longitude: Double,
+    val latitude: Double, // Kept for API consistency
+    val longitude: Double, // Kept for API consistency
     val address: String,
     val city: String,
     val state: String? = null,
@@ -90,8 +90,8 @@ data class EvChargingStationResponse(
     @Contextual val id: UUID,
     val name: String,
     val description: String? = null,
-    val latitude: Double,
-    val longitude: Double,
+    val latitude: Double, // Kept for API consistency
+    val longitude: Double, // Kept for API consistency
     val address: String,
     val city: String,
     val state: String? = null,
@@ -113,8 +113,8 @@ data class EvChargingStationResponse(
 data class LocationUpdateRequest(
     val name: String? = null,
     val description: String? = null,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
+    val latitude: Double? = null, // Re-added for API consistency
+    val longitude: Double? = null, // Re-added for API consistency
     val address: String? = null,
     val city: String? = null,
     val state: String? = null,

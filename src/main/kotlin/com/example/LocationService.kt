@@ -3,21 +3,20 @@ package com.example
 import com.example.models.*
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.slf4j.LoggerFactory // Import LoggerFactory
+import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 import java.util.*
 
 class LocationService {
 
-    private val logger = LoggerFactory.getLogger(LocationService::class.java) // Logger instance
+    private val logger = LoggerFactory.getLogger(LocationService::class.java)
 
     suspend fun createLocation(request: LocationRequest): LocationResponse = dbQuery {
         logger.info("Attempting to create generic location: {}", request.name)
         val newLocationId = Locations.insertAndGetId {
             it[name] = request.name
             it[description] = request.description
-            it[latitude] = request.latitude
-            it[longitude] = request.longitude
+            it[geom] = "POINT(${request.longitude} ${request.latitude})"
             it[address] = request.address
             it[city] = request.city
             it[state] = request.state
@@ -27,7 +26,10 @@ class LocationService {
             it[createdAt] = LocalDateTime.now()
             it[updatedAt] = LocalDateTime.now()
         }
-        val response = Locations.select(Locations.id eq newLocationId).single().toLocationResponse()
+        val response = Locations.select(Locations.columns)
+            .where { Locations.id eq newLocationId }
+            .single()
+            .toLocationResponse()
         logger.info("Created generic location with ID: {}", response.id)
         response
     }
@@ -37,14 +39,13 @@ class LocationService {
         val newLocationId = Locations.insertAndGetId {
             it[name] = request.location.name
             it[description] = request.location.description
-            it[latitude] = request.location.latitude
-            it[longitude] = request.location.longitude
+            it[geom] = "POINT(${request.location.longitude} ${request.location.latitude})"
             it[address] = request.location.address
             it[city] = request.location.city
             it[state] = request.location.state
             it[zipCode] = request.location.zipCode
             it[country] = request.location.country
-            it[type] = LocationType.PARKING_SPACE // Ensure correct type
+            it[type] = LocationType.PARKING_SPACE
             it[createdAt] = LocalDateTime.now()
             it[updatedAt] = LocalDateTime.now()
         }
@@ -59,7 +60,8 @@ class LocationService {
             it[isCovered] = request.isCovered
         }
         val response = (Locations innerJoin ParkingSpaces)
-            .select(Locations.id eq newLocationId)
+            .select(Locations.columns + ParkingSpaces.columns)
+            .where { Locations.id eq newLocationId }
             .single()
             .toParkingSpaceResponse()
         logger.info("Created parking space with ID: {}", response.id)
@@ -71,14 +73,13 @@ class LocationService {
         val newLocationId = Locations.insertAndGetId {
             it[name] = request.location.name
             it[description] = request.location.description
-            it[latitude] = request.location.latitude
-            it[longitude] = request.location.longitude
+            it[geom] = "POINT(${request.location.longitude} ${request.location.latitude})"
             it[address] = request.location.address
             it[city] = request.location.city
             it[state] = request.location.state
             it[zipCode] = request.location.zipCode
             it[country] = request.location.country
-            it[type] = LocationType.EV_CHARGING_STATION // Ensure correct type
+            it[type] = LocationType.EV_CHARGING_STATION
             it[createdAt] = LocalDateTime.now()
             it[updatedAt] = LocalDateTime.now()
         }
@@ -93,7 +94,8 @@ class LocationService {
             it[isOperational] = request.isOperational
         }
         val response = (Locations innerJoin EvChargingStations)
-            .select(Locations.id eq newLocationId)
+            .select(Locations.columns + EvChargingStations.columns)
+            .where { Locations.id eq newLocationId }
             .single()
             .toEvChargingStationResponse()
         logger.info("Created EV charging station with ID: {}", response.id)
@@ -102,59 +104,62 @@ class LocationService {
 
     suspend fun getLocationById(id: UUID): LocationResponse? = dbQuery {
         logger.info("Attempting to get location by ID: {}", id)
-        val location = Locations.select(Locations.id eq id)
+        (Locations.selectAll().where { Locations.id eq id } as Query)
             .singleOrNull()
             ?.toLocationResponse()
-        if (location != null) {
-            logger.info("Found location with ID: {}", id)
-        } else {
-            logger.warn("Location with ID: {} not found", id)
-        }
-        location
     }
 
     suspend fun getParkingSpaceById(id: UUID): ParkingSpaceResponse? = dbQuery {
         logger.info("Attempting to get parking space by ID: {}", id)
-        val parkingSpace = (Locations innerJoin ParkingSpaces)
-            .select(Locations.id eq id)
+        ((Locations innerJoin ParkingSpaces)
+            .selectAll().where { Locations.id eq id } as Query)
             .singleOrNull()
             ?.toParkingSpaceResponse()
-        if (parkingSpace != null) {
-            logger.info("Found parking space with ID: {}", id)
-        } else {
-            logger.warn("Parking space with ID: {} not found", id)
-        }
-        parkingSpace
     }
 
     suspend fun getEvChargingStationById(id: UUID): EvChargingStationResponse? = dbQuery {
         logger.info("Attempting to get EV charging station by ID: {}", id)
-        val evChargingStation = (Locations innerJoin EvChargingStations)
-            .select(Locations.id eq id)
+        ((Locations innerJoin EvChargingStations)
+            .selectAll().where { Locations.id eq id } as Query)
             .singleOrNull()
             ?.toEvChargingStationResponse()
-        if (evChargingStation != null) {
-            logger.info("Found EV charging station with ID: {}", id)
-        } else {
-            logger.warn("EV charging station with ID: {} not found", id)
-        }
-        evChargingStation
     }
 
     suspend fun getAllLocations(): List<LocationResponse> = dbQuery {
         logger.info("Attempting to get all locations")
-        val locations = Locations.selectAll().map { it.toLocationResponse() }
-        logger.info("Retrieved {} locations", locations.size)
-        locations
+        Locations.selectAll().map { it.toLocationResponse() }
     }
 
+    suspend fun findLocationsWithinRadius(latitude: Double, longitude: Double, radiusKm: Double): List<LocationResponse> = dbQuery {
+        logger.info("Attempting to find locations within {}km of ({}, {})", radiusKm, latitude, longitude)
+        val center = CenterPoint(longitude, latitude)
+        Locations.selectAll()
+            .where { DWithinOp(Locations.geom, center, radiusKm * 1000.0) }
+            .map { it.toLocationResponse() }
+    }
+
+    class DWithinOp(val geom: Expression<*>, val center: CenterPoint, val distance: Double) : Op<Boolean>() {
+        override fun toQueryBuilder(queryBuilder: QueryBuilder) {
+            queryBuilder.append("ST_DWithin(")
+            queryBuilder.append(geom)
+            queryBuilder.append(", ST_SetSRID(ST_Point(")
+            queryBuilder.registerArgument(DoubleColumnType(), center.lon)
+            queryBuilder.append(", ")
+            queryBuilder.registerArgument(DoubleColumnType(), center.lat)
+            queryBuilder.append("), 4326), ")
+            queryBuilder.registerArgument(DoubleColumnType(), distance)
+            queryBuilder.append(")")
+        }
+    }
+    data class CenterPoint(val lon: Double, val lat: Double)
+
     suspend fun updateLocation(id: UUID, request: LocationUpdateRequest): LocationResponse? = dbQuery {
-        logger.info("Attempting to update generic location with ID: {}", id)
-        val updatedRows = Locations.update({ Locations.id eq id }) {
+        Locations.update({ Locations.id eq id }) {
             request.name?.let { name -> it[Locations.name] = name }
             request.description?.let { description -> it[Locations.description] = description }
-            request.latitude?.let { latitude -> it[Locations.latitude] = latitude }
-            request.longitude?.let { longitude -> it[Locations.longitude] = longitude }
+            if (request.latitude != null && request.longitude != null) {
+                it[Locations.geom] = "POINT(${request.longitude} ${request.latitude})"
+            }
             request.address?.let { address -> it[Locations.address] = address }
             request.city?.let { city -> it[Locations.city] = city }
             request.state?.let { state -> it[Locations.state] = state }
@@ -163,40 +168,12 @@ class LocationService {
             request.type?.let { type -> it[Locations.type] = type }
             it[Locations.updatedAt] = LocalDateTime.now()
         }
-
-        if (updatedRows > 0) {
-            val updatedLocation = Locations.select(Locations.id eq id).singleOrNull()?.toLocationResponse()
-            if (updatedLocation != null) {
-                logger.info("Updated generic location with ID: {}", id)
-            } else {
-                logger.warn("Updated generic location with ID: {} but could not retrieve it.", id)
-            }
-            updatedLocation
-        } else {
-            logger.warn("Failed to find or update generic location with ID: {}", id)
-            null
-        }
+        getLocationById(id)
     }
 
     suspend fun updateParkingSpace(id: UUID, request: ParkingSpaceUpdateRequest): ParkingSpaceResponse? = dbQuery {
-        logger.info("Attempting to update parking space with ID: {}", id)
-        val updatedLocationRows = request.location?.let { locUpdate ->
-            Locations.update({ Locations.id eq id }) {
-                locUpdate.name?.let { name -> it[Locations.name] = name }
-                locUpdate.description?.let { description -> it[Locations.description] = description }
-                locUpdate.latitude?.let { latitude -> it[Locations.latitude] = latitude }
-                locUpdate.longitude?.let { longitude -> it[Locations.longitude] = longitude }
-                locUpdate.address?.let { address -> it[Locations.address] = address }
-                locUpdate.city?.let { city -> it[Locations.city] = city }
-                locUpdate.state?.let { state -> it[Locations.state] = state }
-                locUpdate.zipCode?.let { zipCode -> it[Locations.zipCode] = zipCode }
-                locUpdate.country?.let { country -> it[Locations.country] = country }
-                locUpdate.type?.let { type -> it[Locations.type] = type }
-                it[Locations.updatedAt] = LocalDateTime.now()
-            }
-        } ?: 0 // If no location updates, consider 0 rows updated
-
-        val updatedParkingSpaceRows = ParkingSpaces.update({ ParkingSpaces.locationId eq id }) {
+        request.location?.let { updateLocation(id, it) }
+        ParkingSpaces.update({ ParkingSpaces.locationId eq id }) {
             request.totalSpaces?.let { totalSpaces -> it[ParkingSpaces.totalSpaces] = totalSpaces }
             request.availableSpaces?.let { availableSpaces -> it[ParkingSpaces.availableSpaces] = availableSpaces }
             request.hourlyRate?.let { hourlyRate -> it[ParkingSpaces.hourlyRate] = hourlyRate }
@@ -204,43 +181,12 @@ class LocationService {
             request.isHandicapAccessible?.let { isHandicapAccessible -> it[ParkingSpaces.isHandicapAccessible] = isHandicapAccessible }
             request.isCovered?.let { isCovered -> it[ParkingSpaces.isCovered] = isCovered }
         }
-
-        if (updatedLocationRows > 0 || updatedParkingSpaceRows > 0) {
-            val updatedParkingSpace = (Locations innerJoin ParkingSpaces)
-                .select(Locations.id eq id)
-                .singleOrNull()
-                ?.toParkingSpaceResponse()
-            if (updatedParkingSpace != null) {
-                logger.info("Updated parking space with ID: {}", id)
-            } else {
-                logger.warn("Updated parking space with ID: {} but could not retrieve it.", id)
-            }
-            updatedParkingSpace
-        } else {
-            logger.warn("Failed to find or update parking space with ID: {}", id)
-            null
-        }
+        getParkingSpaceById(id)
     }
 
     suspend fun updateEvChargingStation(id: UUID, request: EvChargingStationUpdateRequest): EvChargingStationResponse? = dbQuery {
-        logger.info("Attempting to update EV charging station with ID: {}", id)
-        val updatedLocationRows = request.location?.let { locUpdate ->
-            Locations.update({ Locations.id eq id }) {
-                locUpdate.name?.let { name -> it[Locations.name] = name }
-                locUpdate.description?.let { description -> it[Locations.description] = description }
-                locUpdate.latitude?.let { latitude -> it[Locations.latitude] = latitude }
-                locUpdate.longitude?.let { longitude -> it[Locations.longitude] = longitude }
-                locUpdate.address?.let { address -> it[Locations.address] = address }
-                locUpdate.city?.let { city -> it[Locations.city] = city }
-                locUpdate.state?.let { state -> it[Locations.state] = state }
-                locUpdate.zipCode?.let { zipCode -> it[Locations.zipCode] = zipCode }
-                locUpdate.country?.let { country -> it[Locations.country] = country }
-                locUpdate.type?.let { type -> it[Locations.type] = type }
-                it[Locations.updatedAt] = LocalDateTime.now()
-            }
-        } ?: 0
-
-        val updatedEvChargingStationRows = EvChargingStations.update({ EvChargingStations.locationId eq id }) {
+        request.location?.let { updateLocation(id, it) }
+        EvChargingStations.update({ EvChargingStations.locationId eq id }) {
             request.chargerType?.let { chargerType -> it[EvChargingStations.chargerType] = chargerType }
             request.numChargers?.let { numChargers -> it[EvChargingStations.numChargers] = numChargers }
             request.chargingSpeedKw?.let { chargingSpeedKw -> it[EvChargingStations.chargingSpeedKw] = chargingSpeedKw }
@@ -248,90 +194,109 @@ class LocationService {
             request.costPerKwh?.let { costPerKwh -> it[EvChargingStations.costPerKwh] = costPerKwh }
             request.isOperational?.let { isOperational -> it[EvChargingStations.isOperational] = isOperational }
         }
-
-        if (updatedLocationRows > 0 || updatedEvChargingStationRows > 0) {
-            val updatedEvChargingStation = (Locations innerJoin EvChargingStations)
-                .select(Locations.id eq id)
-                .singleOrNull()
-                ?.toEvChargingStationResponse()
-            if (updatedEvChargingStation != null) {
-                logger.info("Updated EV charging station with ID: {}", id)
-            } else {
-                logger.warn("Updated EV charging station with ID: {} but could not retrieve it.", id)
-            }
-            updatedEvChargingStation
-        } else {
-            logger.warn("Failed to find or update EV charging station with ID: {}", id)
-            null
-        }
+        getEvChargingStationById(id)
     }
 
     suspend fun deleteLocation(id: UUID): Boolean = dbQuery {
-        logger.info("Attempting to delete location with ID: {}", id)
-        val deletedRows = Locations.deleteWhere { Locations.id eq id }
-        if (deletedRows > 0) {
-            logger.info("Deleted location with ID: {}", id)
-        } else {
-            logger.warn("Failed to find or delete location with ID: {}", id)
-        }
-        deletedRows > 0
+        Locations.deleteWhere { Locations.id eq id } > 0
     }
 
-    private fun ResultRow.toLocationResponse() = LocationResponse(
-        id = this[Locations.id].value,
-        name = this[Locations.name],
-        description = this[Locations.description],
-        latitude = this[Locations.latitude],
-        longitude = this[Locations.longitude],
-        address = this[Locations.address],
-        city = this[Locations.city],
-        state = this[Locations.state],
-        zipCode = this[Locations.zipCode],
-        country = this[Locations.country],
-        type = this[Locations.type],
-        createdAt = this[Locations.createdAt].toString(),
-        updatedAt = this[Locations.updatedAt].toString()
-    )
+    private fun ResultRow.toLocationResponse(): LocationResponse {
+        val geomValue = this[Locations.geom]
+        val (lon, lat) = parseGeomValue(geomValue)
+        return LocationResponse(
+            id = this[Locations.id].value,
+            name = this[Locations.name],
+            description = this[Locations.description],
+            latitude = lat,
+            longitude = lon,
+            address = this[Locations.address],
+            city = this[Locations.city],
+            state = this[Locations.state],
+            zipCode = this[Locations.zipCode],
+            country = this[Locations.country],
+            type = this[Locations.type],
+            createdAt = this[Locations.createdAt].toString(),
+            updatedAt = this[Locations.updatedAt].toString()
+        )
+    }
 
-    private fun ResultRow.toParkingSpaceResponse() = ParkingSpaceResponse(
-        id = this[Locations.id].value,
-        name = this[Locations.name],
-        description = this[Locations.description],
-        latitude = this[Locations.latitude],
-        longitude = this[Locations.longitude],
-        address = this[Locations.address],
-        city = this[Locations.city],
-        state = this[Locations.state],
-        zipCode = this[Locations.zipCode],
-        country = this[Locations.country],
-        totalSpaces = this[ParkingSpaces.totalSpaces],
-        availableSpaces = this[ParkingSpaces.availableSpaces],
-        hourlyRate = this[ParkingSpaces.hourlyRate],
-        maxDurationHours = this[ParkingSpaces.maxDurationHours],
-        isHandicapAccessible = this[ParkingSpaces.isHandicapAccessible],
-        isCovered = this[ParkingSpaces.isCovered],
-        createdAt = this[Locations.createdAt].toString(),
-        updatedAt = this[Locations.updatedAt].toString()
-    )
+    private fun ResultRow.toParkingSpaceResponse(): ParkingSpaceResponse {
+        val geomValue = this[Locations.geom]
+        val (lon, lat) = parseGeomValue(geomValue)
+        return ParkingSpaceResponse(
+            id = this[Locations.id].value,
+            name = this[Locations.name],
+            description = this[Locations.description],
+            latitude = lat,
+            longitude = lon,
+            address = this[Locations.address],
+            city = this[Locations.city],
+            state = this[Locations.state],
+            zipCode = this[Locations.zipCode],
+            country = this[Locations.country],
+            totalSpaces = this[ParkingSpaces.totalSpaces],
+            availableSpaces = this[ParkingSpaces.availableSpaces],
+            hourlyRate = this[ParkingSpaces.hourlyRate],
+            maxDurationHours = this[ParkingSpaces.maxDurationHours],
+            isHandicapAccessible = this[ParkingSpaces.isHandicapAccessible],
+            isCovered = this[ParkingSpaces.isCovered],
+            createdAt = this[Locations.createdAt].toString(),
+            updatedAt = this[Locations.updatedAt].toString()
+        )
+    }
 
-    private fun ResultRow.toEvChargingStationResponse() = EvChargingStationResponse(
-        id = this[Locations.id].value,
-        name = this[Locations.name],
-        description = this[Locations.description],
-        latitude = this[Locations.latitude],
-        longitude = this[Locations.longitude],
-        address = this[Locations.address],
-        city = this[Locations.city],
-        state = this[Locations.state],
-        zipCode = this[Locations.zipCode],
-        country = this[Locations.country],
-        chargerType = this[EvChargingStations.chargerType],
-        numChargers = this[EvChargingStations.numChargers],
-        chargingSpeedKw = this[EvChargingStations.chargingSpeedKw],
-        isFastCharging = this[EvChargingStations.isFastCharging],
-        costPerKwh = this[EvChargingStations.costPerKwh],
-        isOperational = this[EvChargingStations.isOperational],
-        createdAt = this[Locations.createdAt].toString(),
-        updatedAt = this[Locations.updatedAt].toString()
-    )
+    private fun ResultRow.toEvChargingStationResponse(): EvChargingStationResponse {
+        val geomValue = this[Locations.geom]
+        val (lon, lat) = parseGeomValue(geomValue)
+        return EvChargingStationResponse(
+            id = this[Locations.id].value,
+            name = this[Locations.name],
+            description = this[Locations.description],
+            latitude = lat,
+            longitude = lon,
+            address = this[Locations.address],
+            city = this[Locations.city],
+            state = this[Locations.state],
+            zipCode = this[Locations.zipCode],
+            country = this[Locations.country],
+            chargerType = this[EvChargingStations.chargerType],
+            numChargers = this[EvChargingStations.numChargers],
+            chargingSpeedKw = this[EvChargingStations.chargingSpeedKw],
+            isFastCharging = this[EvChargingStations.isFastCharging],
+            costPerKwh = this[EvChargingStations.costPerKwh],
+            isOperational = this[EvChargingStations.isOperational],
+            createdAt = this[Locations.createdAt].toString(),
+            updatedAt = this[Locations.updatedAt].toString()
+        )
+    }
+
+    private fun parseGeomValue(value: String): Pair<Double, Double> {
+        // Handle both WKT "POINT(lon lat)" and EWKB Hex strings
+        return if (value.startsWith("0101")) {
+            parseEwkbHex(value)
+        } else {
+            val coordinates = value.substringAfter("(").substringBefore(")")
+                .trim()
+                .split(" ")
+            coordinates[0].toDouble() to coordinates[1].toDouble()
+        }
+    }
+
+    private fun parseEwkbHex(hex: String): Pair<Double, Double> {
+        // EWKB format for POINT: [byteOrder][type][srid][x][y]
+        // 01 01000020 E6100000 <8 bytes for X> <8 bytes for Y>
+        // This is a simplified extraction from the known fixed offset for SRID 4326 EWKB
+        val xHex = hex.substring(18, 34)
+        val yHex = hex.substring(34, 50)
+        
+        fun hexToDouble(h: String): Double {
+            // Reverse bytes because the output '01' indicates Little Endian
+            val reversed = h.chunked(2).reversed().joinToString("")
+            val longBits = java.lang.Long.parseUnsignedLong(reversed, 16)
+            return java.lang.Double.longBitsToDouble(longBits)
+        }
+        
+        return hexToDouble(xHex) to hexToDouble(yHex)
+    }
 }

@@ -7,6 +7,7 @@ import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -45,6 +46,16 @@ fun main() {
                 }
             })
         }
+        install(CORS) {
+            allowHost("antonvolker.github.io", schemes = listOf("https"))
+            allowMethod(HttpMethod.Get)
+            allowMethod(HttpMethod.Post)
+            allowMethod(HttpMethod.Put)
+            allowMethod(HttpMethod.Delete)
+            allowMethod(HttpMethod.Options)
+            allowHeader(HttpHeaders.ContentType)
+            allowHeader(HttpHeaders.Accept)
+        }
         configureRouting()
     }.start(wait = true)
 }
@@ -80,6 +91,20 @@ fun Application.configureRouting() {
             } catch (e: IllegalArgumentException) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid UUID format")
             }
+        }
+
+        get("/locations/search") {
+            val lat = call.request.queryParameters["lat"]?.toDoubleOrNull()
+            val lon = call.request.queryParameters["lon"]?.toDoubleOrNull()
+            val radiusKm = call.request.queryParameters["radiusKm"]?.toDoubleOrNull()
+
+            if (lat == null || lon == null || radiusKm == null) {
+                call.respond(HttpStatusCode.BadRequest, "Missing or invalid 'lat', 'lon', or 'radiusKm' query parameters.")
+                return@get
+            }
+
+            val locations = locationService.findLocationsWithinRadius(lat, lon, radiusKm)
+            call.respond(locations)
         }
 
         post("/locations/parking") {
@@ -165,3 +190,4 @@ fun Application.configureRouting() {
         }
     }
 }
+
